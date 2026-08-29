@@ -85,7 +85,7 @@ final class IslandModel: ObservableObject {
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale.current
-        formatter.setLocalizedDateFormatFromTemplate("EEE, d MMM")
+        formatter.setLocalizedDateFormatFromTemplate("EEE d")
         return formatter
     }()
 
@@ -113,6 +113,11 @@ final class IslandModel: ObservableObject {
     private var playbackProgressTimer: Timer?
     private var gmailPollingTimer: Timer?
     private var lockedAudioSourceBundleIdentifier: String?
+    private var lastSuccessfulAudioSourceBundleIdentifier: String?
+    private let calendarCacheDuration: TimeInterval = 300
+    private let gmailPollingInterval: TimeInterval = 30
+    private var calendarCacheDate: Date?
+    private var isGmailPolling = false
     private var gmailPageTokens: [String?] = [nil]
     private var gmailPageIndex = 0
     private var gmailNextPageToken: String?
@@ -265,7 +270,7 @@ final class IslandModel: ObservableObject {
             await loadGmailInboxPage(pageIndex: 0, pageToken: nil, showStatus: false)
         }
 
-        gmailPollingTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+        gmailPollingTimer = Timer.scheduledTimer(withTimeInterval: gmailPollingInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 await self?.pollGmail(showStatus: false)
             }
@@ -280,6 +285,14 @@ final class IslandModel: ObservableObject {
                 expandRequests.send(5)
             }
             return false
+        }
+        guard !isGmailPolling else {
+            return false
+        }
+
+        isGmailPolling = true
+        defer {
+            isGmailPolling = false
         }
 
         do {
@@ -447,7 +460,7 @@ final class IslandModel: ObservableObject {
 
         var pausedFallback: (source: AudioSource, snapshot: AudioSnapshot)?
 
-        for source in Self.audioSources where isAppRunning(bundleIdentifier: source.bundleIdentifier) {
+        for source in prioritizedAudioSources() where isAppRunning(bundleIdentifier: source.bundleIdentifier) {
             if let output = runAppleScript(source.snapshotScript),
                let snapshot = parseAudioSnapshot(output) {
                 if snapshot.isPlaying {
@@ -482,6 +495,18 @@ final class IslandModel: ObservableObject {
         setPlaybackProgressActive(false)
     }
 
+    private func prioritizedAudioSources() -> [AudioSource] {
+        guard let lastSuccessfulAudioSourceBundleIdentifier,
+              let index = Self.audioSources.firstIndex(where: { $0.bundleIdentifier == lastSuccessfulAudioSourceBundleIdentifier }) else {
+            return Self.audioSources
+        }
+
+        var sources = Self.audioSources
+        let lastSource = sources.remove(at: index)
+        sources.insert(lastSource, at: 0)
+        return sources
+    }
+
     @discardableResult
     private func refreshLockedAudioSource(_ source: AudioSource) -> Bool {
         guard let output = runAppleScript(source.snapshotScript),
@@ -504,6 +529,7 @@ final class IslandModel: ObservableObject {
         updatePlaybackDisplay(elapsed: snapshot.elapsed, duration: snapshot.duration)
         supportsAudioControls = !source.controlScripts.isEmpty
         currentAudioSource = source
+        lastSuccessfulAudioSourceBundleIdentifier = source.bundleIdentifier
     }
 
     private func refreshCalendarForOpening() {
@@ -511,9 +537,20 @@ final class IslandModel: ObservableObject {
 
         if status == .notDetermined {
             requestCalendarAccessIfNeeded()
+        } else if isCalendarCacheValid {
+            return
         } else {
             refreshCalendar()
         }
+    }
+
+    private var isCalendarCacheValid: Bool {
+        guard let calendarCacheDate else {
+            return false
+        }
+
+        return Date().timeIntervalSince(calendarCacheDate) < calendarCacheDuration
+            && Calendar.current.isDate(calendarCacheDate, inSameDayAs: Date())
     }
 
     private func requestCalendarAccessIfNeeded() {
@@ -545,10 +582,12 @@ final class IslandModel: ObservableObject {
                     refreshCalendar()
                 } else {
                     calendarItems = []
+                    calendarCacheDate = nil
                     calendarStatusText = "No calendar access"
                 }
             } catch {
                 calendarItems = []
+                calendarCacheDate = nil
                 calendarStatusText = "Calendar is unavailable"
             }
         }
@@ -559,6 +598,7 @@ final class IslandModel: ObservableObject {
         if #available(macOS 14.0, *) {
             guard status == .fullAccess else {
                 calendarItems = []
+                calendarCacheDate = nil
                 refreshCalendarShell(events: [])
                 calendarStatusText = "No calendar access"
                 return
@@ -566,6 +606,7 @@ final class IslandModel: ObservableObject {
         } else {
             guard status == .authorized else {
                 calendarItems = []
+                calendarCacheDate = nil
                 refreshCalendarShell(events: [])
                 calendarStatusText = "No calendar access"
                 return
@@ -591,6 +632,7 @@ final class IslandModel: ObservableObject {
 
         calendarStatusText = calendarItems.isEmpty ? "No events for 7 days" : ""
         refreshCalendarShell(events: eventStore.events(matching: monthPredicate()))
+        calendarCacheDate = Date()
     }
 
     private func refreshCalendarShell(events: [EKEvent] = []) {

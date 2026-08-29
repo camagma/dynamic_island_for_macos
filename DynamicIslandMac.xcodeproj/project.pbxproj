@@ -47,15 +47,15 @@
 		};
 		0A1000312C7A000100000001 /* DynamicIslandMac */ = {
 			isa = PBXGroup;
-				children = (
-					0A1000112C7A000100000001 /* DynamicIslandMacApp.swift */,
-					0A1000122C7A000100000001 /* OverlayWindowController.swift */,
-					0A1000162C7A000100000001 /* NotchLayoutCalculator.swift */,
-					0A1000132C7A000100000001 /* IslandView.swift */,
-					0A1000142C7A000100000001 /* IslandModel.swift */,
-					0A1000172C7A000100000001 /* GmailService.swift */,
-					0A1000152C7A000100000001 /* Info.plist */,
-				);
+			children = (
+				0A1000112C7A000100000001 /* DynamicIslandMacApp.swift */,
+				0A1000122C7A000100000001 /* OverlayWindowController.swift */,
+				0A1000162C7A000100000001 /* NotchLayoutCalculator.swift */,
+				0A1000132C7A000100000001 /* IslandView.swift */,
+				0A1000142C7A000100000001 /* IslandModel.swift */,
+				0A1000172C7A000100000001 /* GmailService.swift */,
+				0A1000152C7A000100000001 /* Info.plist */,
+			);
 			path = DynamicIslandMac;
 			sourceTree = "<group>";
 		};
@@ -134,14 +134,14 @@
 		0A1000502C7A000100000001 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
-				files = (
-					0A1000012C7A000100000001 /* DynamicIslandMacApp.swift in Sources */,
-					0A1000022C7A000100000001 /* OverlayWindowController.swift in Sources */,
-					0A1000052C7A000100000001 /* NotchLayoutCalculator.swift in Sources */,
-					0A1000032C7A000100000001 /* IslandView.swift in Sources */,
-					0A1000042C7A000100000001 /* IslandModel.swift in Sources */,
-					0A1000062C7A000100000001 /* GmailService.swift in Sources */,
-				);
+			files = (
+				0A1000012C7A000100000001 /* DynamicIslandMacApp.swift in Sources */,
+				0A1000022C7A000100000001 /* OverlayWindowController.swift in Sources */,
+				0A1000052C7A000100000001 /* NotchLayoutCalculator.swift in Sources */,
+				0A1000032C7A000100000001 /* IslandView.swift in Sources */,
+				0A1000042C7A000100000001 /* IslandModel.swift in Sources */,
+				0A1000062C7A000100000001 /* GmailService.swift in Sources */,
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
@@ -268,6 +268,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = 888TZ8GYDR;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = DynamicIslandMac/Info.plist;
@@ -293,6 +294,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "";
+				"DEVELOPMENT_TEAM[sdk=macosx*]" = 888TZ8GYDR;
 				ENABLE_HARDENED_RUNTIME = NO;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = DynamicIslandMac/Info.plist;
