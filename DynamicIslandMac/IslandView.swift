@@ -52,10 +52,11 @@ struct IslandView: View {
                     .overlay(Color.white.opacity(0.14))
 
                 HStack(alignment: .top, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 9) {
+                    VStack(alignment: .leading, spacing: 5) {
                         nowPlayingPanel
                         upcomingEvents
                         notificationCentre
+                        Spacer(minLength: 0)
                         clipboardPreview
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -307,41 +308,126 @@ struct IslandView: View {
     }
 
     private var notificationCentre: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Notification Center", systemImage: "bell.fill")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.80))
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 7) {
+                Label("Notification Center", systemImage: "bell.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.80))
 
-            if model.notifications.isEmpty {
+                Spacer(minLength: 6)
+
+                Text(model.gmailPageText)
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.42))
+                    .lineLimit(1)
+
+                gmailRefreshButton
+            }
+
+            if !model.gmailInboxMessages.isEmpty {
+                ScrollView(.vertical, showsIndicators: true) {
+                    gmailInboxList
+                }
+                .scrollIndicators(.visible)
+                .frame(height: 44, alignment: .top)
+            } else if model.notifications.isEmpty {
                 Text(model.notificationStatusText)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.white.opacity(0.55))
                     .lineLimit(2)
             } else {
-                ForEach(model.notifications.prefix(2)) { notification in
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 7) {
-                            Text(notification.title)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.86))
-                                .lineLimit(1)
+                ScrollView(.vertical, showsIndicators: true) {
+                    notificationList
+                }
+                .scrollIndicators(.visible)
+                .frame(height: 38, alignment: .top)
+            }
+        }
+    }
 
-                            Spacer(minLength: 6)
+    private var gmailRefreshButton: some View {
+        Button {
+            model.reloadGmailInbox()
+        } label: {
+            Image(systemName: model.isGmailLoading ? "hourglass" : "arrow.clockwise")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundStyle(.white.opacity(model.isGmailLoading ? 0.32 : 0.74))
+                .frame(width: 17, height: 17)
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(model.isGmailLoading ? 0.025 : 0.07))
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(model.isGmailLoading)
+    }
 
-                            Text(notification.timeText)
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.42))
-                        }
-
-                        Text(notification.body)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.58))
+    private var notificationList: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(model.notifications) { notification in
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 7) {
+                        Text(notification.title)
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.86))
                             .lineLimit(1)
-                            .truncationMode(.tail)
+
+                        Spacer(minLength: 6)
+
+                        Text(notification.timeText)
+                            .font(.system(size: 8, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.42))
                     }
+
+                    Text(notification.body)
+                        .font(.system(size: 8, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.58))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
             }
         }
+        .padding(.trailing, 8)
+    }
+
+    private var gmailInboxList: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            ForEach(model.gmailInboxMessages) { message in
+                HStack(spacing: 6) {
+                    Text(message.senderDisplayName)
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.70))
+                        .lineLimit(1)
+                        .frame(width: 54, alignment: .leading)
+
+                    Text(message.subject.isEmpty ? "New email" : message.subject)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.84))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+
+            if model.canLoadNextGmailPage {
+                Button {
+                    model.loadNextGmailPage()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: model.isGmailLoading ? "hourglass" : "plus")
+                            .font(.system(size: 8, weight: .bold))
+
+                        Text(model.isGmailLoading ? "Loading" : "Load more")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .foregroundStyle(.white.opacity(model.isGmailLoading ? 0.36 : 0.64))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.isGmailLoading)
+                .padding(.top, 2)
+            }
+        }
+        .padding(.trailing, 8)
     }
 
     private var clipboardPreview: some View {

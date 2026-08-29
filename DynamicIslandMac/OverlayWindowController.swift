@@ -39,8 +39,8 @@ final class OverlayWindowController {
         positionWindow(expanded: false, animated: false)
 
         model.expandRequests
-            .sink { [weak self] in
-                self?.forceExpand()
+            .sink { [weak self] duration in
+                self?.forceExpand(duration: duration)
             }
             .store(in: &cancellables)
     }
@@ -58,6 +58,10 @@ final class OverlayWindowController {
 
     func addTestNotification() {
         model.addTestNotification()
+    }
+
+    func checkGmailNow() {
+        model.checkGmailNow()
     }
 
     func adjustNotchLayout(_ adjustment: NotchLayoutAdjustment) {
@@ -106,7 +110,7 @@ final class OverlayWindowController {
         window.setFrame(frame, display: true, animate: animated)
     }
 
-    private func forceExpand(duration: TimeInterval = 7) {
+    private func forceExpand(duration: TimeInterval = 5) {
         forcedExpandedUntil = Date().addingTimeInterval(duration)
 
         guard !expanded else {

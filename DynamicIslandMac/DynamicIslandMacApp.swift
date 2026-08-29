@@ -41,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(title: "Test Notification", action: #selector(testNotification), keyEquivalent: "n"))
+        menu.addItem(NSMenuItem(title: "Check Gmail Now", action: #selector(checkGmailNow), keyEquivalent: "g"))
         menu.addItem(calibrationMenuItem())
         menu.addItem(presetsMenuItem())
         menu.addItem(NSMenuItem.separator())
@@ -83,6 +84,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func testNotification() {
         overlayController?.addTestNotification()
+    }
+
+    @objc private func checkGmailNow() {
+        overlayController?.checkGmailNow()
     }
 
     @objc private func makeWider() {

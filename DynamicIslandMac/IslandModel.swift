@@ -65,10 +65,15 @@ final class IslandModel: ObservableObject {
     @Published private(set) var calendarStatusText = "Calendar access required"
     @Published private(set) var notifications: [IslandNotification] = []
     @Published private(set) var notificationStatusText = "No new notifications"
+    @Published private(set) var gmailInboxMessages: [GmailNotification] = []
+    @Published private(set) var gmailPageText = "Gmail"
+    @Published private(set) var isGmailLoading = false
+    @Published private(set) var canLoadPreviousGmailPage = false
+    @Published private(set) var canLoadNextGmailPage = false
     @Published private(set) var clipboardText = "Clipboard is empty"
     @Published private(set) var hasClipboardText = false
     @Published private(set) var notchTextAvoidance = NotchTextAvoidance.fallback
-    let expandRequests = PassthroughSubject<Void, Never>()
+    let expandRequests = PassthroughSubject<TimeInterval, Never>()
 
     private let timeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -99,16 +104,22 @@ final class IslandModel: ObservableObject {
     }()
 
     private let eventStore = EKEventStore()
+    private let gmailService = GmailService()
     private var didRequestCalendarAccess = false
     private var currentAudioSource: AudioSource?
     private var audioElapsed: TimeInterval?
     private var audioDuration: TimeInterval?
     private var audioSnapshotDate: Date?
     private var playbackProgressTimer: Timer?
+    private var gmailPollingTimer: Timer?
     private var lockedAudioSourceBundleIdentifier: String?
+    private var gmailPageTokens: [String?] = [nil]
+    private var gmailPageIndex = 0
+    private var gmailNextPageToken: String?
 
     func start() {
         refreshCalendarShell()
+        startGmailPollingIfConfigured()
     }
 
     func refreshForOpening() {
@@ -135,7 +146,7 @@ final class IslandModel: ObservableObject {
         notifications.insert(notification, at: 0)
         notifications = Array(notifications.prefix(5))
         notificationStatusText = ""
-        expandRequests.send()
+        expandRequests.send(5)
     }
 
     func addTestNotification() {
@@ -184,10 +195,243 @@ final class IslandModel: ObservableObject {
         }
     }
 
+    func checkGmailNow() {
+        Task {
+            let didShowNewMessages = await pollGmail(showStatus: false)
+            gmailPageTokens = [nil]
+            gmailPageIndex = 0
+            gmailNextPageToken = nil
+            await loadGmailInboxPage(pageIndex: 0, pageToken: nil, showStatus: false)
+
+            if !didShowNewMessages {
+                await loadRecentGmailMessagesForDisplay(showStatus: true)
+            }
+        }
+    }
+
+    func reloadGmailInbox() {
+        Task {
+            gmailPageTokens = [nil]
+            gmailPageIndex = 0
+            gmailNextPageToken = nil
+            await loadGmailInboxPage(pageIndex: 0, pageToken: nil, showStatus: true)
+        }
+    }
+
+    func loadPreviousGmailPage() {
+        guard gmailPageIndex > 0 else {
+            return
+        }
+
+        Task {
+            let previousIndex = gmailPageIndex - 1
+            await loadGmailInboxPage(pageIndex: previousIndex, pageToken: gmailPageTokens[previousIndex], showStatus: true)
+        }
+    }
+
+    func loadNextGmailPage() {
+        guard let gmailNextPageToken else {
+            return
+        }
+
+        Task {
+            let nextIndex = gmailPageIndex + 1
+            if gmailPageTokens.count <= nextIndex {
+                gmailPageTokens.append(gmailNextPageToken)
+            }
+            await loadGmailInboxPage(pageIndex: nextIndex, pageToken: gmailNextPageToken, showStatus: true, appending: true)
+        }
+    }
+
     private func refreshTime() {
         let now = Date()
         timeText = timeFormatter.string(from: now)
         dateText = dateFormatter.string(from: now)
+    }
+
+    private func startGmailPollingIfConfigured() {
+        gmailPollingTimer?.invalidate()
+        gmailPollingTimer = nil
+
+        guard gmailService.isConfigured else {
+            return
+        }
+
+        Task {
+            let didShowNewMessages = await pollGmail(showStatus: false)
+            if !didShowNewMessages {
+                await loadRecentGmailMessagesForDisplay(showStatus: false)
+            }
+            await loadGmailInboxPage(pageIndex: 0, pageToken: nil, showStatus: false)
+        }
+
+        gmailPollingTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                await self?.pollGmail(showStatus: false)
+            }
+        }
+    }
+
+    @discardableResult
+    private func pollGmail(showStatus: Bool) async -> Bool {
+        guard gmailService.isConfigured else {
+            if showStatus {
+                notificationStatusText = "Gmail is not configured"
+                expandRequests.send(5)
+            }
+            return false
+        }
+
+        do {
+            let messages = try await gmailService.pollNewInboxMessages()
+            if messages.isEmpty && showStatus {
+                notificationStatusText = "No new Gmail messages"
+                expandRequests.send(5)
+            }
+
+            for message in messages.reversed() {
+                insertGmailInboxMessage(message)
+                addNotification(
+                    title: message.subject,
+                    body: gmailBodyText(from: message)
+                )
+            }
+
+            return !messages.isEmpty
+        } catch {
+            notificationStatusText = "Gmail API unavailable"
+            if showStatus {
+                expandRequests.send(5)
+            }
+            return false
+        }
+    }
+
+    private func loadRecentGmailMessagesForDisplay(showStatus: Bool) async {
+        guard gmailService.isConfigured else {
+            if showStatus {
+                notificationStatusText = "Gmail is not configured"
+                expandRequests.send(5)
+            }
+            return
+        }
+
+        do {
+            let messages = try await gmailService.recentUnreadMessages(limit: 3)
+            guard !messages.isEmpty else {
+                if showStatus {
+                    notificationStatusText = "No unread Gmail messages"
+                    expandRequests.send(5)
+                }
+                return
+            }
+
+            notifications.removeAll()
+            gmailInboxMessages.removeAll()
+            for message in messages.reversed() {
+                insertGmailInboxMessage(message)
+                insertNotificationWithoutExpanding(
+                    title: message.subject,
+                    body: gmailBodyText(from: message)
+                )
+            }
+
+            notificationStatusText = ""
+            if showStatus {
+                expandRequests.send(5)
+            }
+        } catch {
+            notificationStatusText = "Gmail API unavailable"
+            if showStatus {
+                expandRequests.send(5)
+            }
+        }
+    }
+
+    private func loadGmailInboxPage(pageIndex: Int, pageToken: String?, showStatus: Bool, appending: Bool = false) async {
+        guard gmailService.isConfigured else {
+            gmailInboxMessages = []
+            gmailPageText = "Gmail not configured"
+            canLoadPreviousGmailPage = false
+            canLoadNextGmailPage = false
+            if showStatus {
+                notificationStatusText = "Gmail is not configured"
+                expandRequests.send(5)
+            }
+            return
+        }
+
+        isGmailLoading = true
+        defer {
+            isGmailLoading = false
+        }
+
+        do {
+            let page = try await gmailService.inboxPage(pageToken: pageToken, pageSize: 5)
+            if appending {
+                appendGmailInboxMessages(page.messages)
+            } else {
+                gmailInboxMessages = page.messages
+            }
+            gmailPageIndex = pageIndex
+            gmailNextPageToken = page.nextPageToken
+            gmailPageText = gmailInboxMessages.isEmpty ? "Gmail" : "\(gmailInboxMessages.count) emails"
+            canLoadPreviousGmailPage = pageIndex > 0
+            canLoadNextGmailPage = page.nextPageToken != nil
+
+            if page.messages.isEmpty {
+                notificationStatusText = "No Gmail inbox messages"
+            }
+
+            if showStatus {
+                expandRequests.send(5)
+            }
+        } catch {
+            gmailInboxMessages = []
+            gmailPageText = "Gmail unavailable"
+            canLoadPreviousGmailPage = pageIndex > 0
+            canLoadNextGmailPage = false
+            notificationStatusText = "Gmail API unavailable"
+            if showStatus {
+                expandRequests.send(5)
+            }
+        }
+    }
+
+    private func appendGmailInboxMessages(_ messages: [GmailNotification]) {
+        var existingIDs = Set(gmailInboxMessages.map(\.id))
+
+        for message in messages where !existingIDs.contains(message.id) {
+            gmailInboxMessages.append(message)
+            existingIDs.insert(message.id)
+        }
+    }
+
+    private func insertGmailInboxMessage(_ message: GmailNotification) {
+        gmailInboxMessages.removeAll { $0.id == message.id }
+        gmailInboxMessages.insert(message, at: 0)
+        gmailInboxMessages = Array(gmailInboxMessages.prefix(30))
+        gmailPageText = "\(gmailInboxMessages.count) emails"
+    }
+
+    private func gmailBodyText(from message: GmailNotification) -> String {
+        let sender = message.senderDisplayName
+        guard !message.snippet.isEmpty else {
+            return sender
+        }
+
+        return "\(sender): \(message.snippet)"
+    }
+
+    private func insertNotificationWithoutExpanding(title: String, body: String) {
+        let notification = IslandNotification(
+            title: title,
+            body: body,
+            timeText: eventTimeFormatter.string(from: Date())
+        )
+
+        notifications.insert(notification, at: 0)
+        notifications = Array(notifications.prefix(5))
     }
 
     private func refreshMusic() {
