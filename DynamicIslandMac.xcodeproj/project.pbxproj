@@ -11,6 +11,7 @@
 		0A1000022C7A000100000001 /* OverlayWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1000122C7A000100000001 /* OverlayWindowController.swift */; };
 		0A1000032C7A000100000001 /* IslandView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1000132C7A000100000001 /* IslandView.swift */; };
 		0A1000042C7A000100000001 /* IslandModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1000142C7A000100000001 /* IslandModel.swift */; };
+		0A1000052C7A000100000001 /* NotchLayoutCalculator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1000162C7A000100000001 /* NotchLayoutCalculator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -20,6 +21,7 @@
 		0A1000132C7A000100000001 /* IslandView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandView.swift; sourceTree = "<group>"; };
 		0A1000142C7A000100000001 /* IslandModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IslandModel.swift; sourceTree = "<group>"; };
 		0A1000152C7A000100000001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		0A1000162C7A000100000001 /* NotchLayoutCalculator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotchLayoutCalculator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -46,6 +48,7 @@
 			children = (
 				0A1000112C7A000100000001 /* DynamicIslandMacApp.swift */,
 				0A1000122C7A000100000001 /* OverlayWindowController.swift */,
+				0A1000162C7A000100000001 /* NotchLayoutCalculator.swift */,
 				0A1000132C7A000100000001 /* IslandView.swift */,
 				0A1000142C7A000100000001 /* IslandModel.swift */,
 				0A1000152C7A000100000001 /* Info.plist */,
@@ -131,6 +134,7 @@
 			files = (
 				0A1000012C7A000100000001 /* DynamicIslandMacApp.swift in Sources */,
 				0A1000022C7A000100000001 /* OverlayWindowController.swift in Sources */,
+				0A1000052C7A000100000001 /* NotchLayoutCalculator.swift in Sources */,
 				0A1000032C7A000100000001 /* IslandView.swift in Sources */,
 				0A1000042C7A000100000001 /* IslandModel.swift in Sources */,
 			);

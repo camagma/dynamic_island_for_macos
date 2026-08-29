@@ -1,21 +1,16 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @MainActor
 final class OverlayWindowController {
-    private enum Layout {
-        static let compactSize = CGSize(width: 178, height: 50)
-        static let expandedSize = CGSize(width: 430, height: 154)
-        static let compactTopInset: CGFloat = -18
-        static let expandedTopInset: CGFloat = -5
-        static let hoverWidth: CGFloat = 178
-        static let hoverHeight: CGFloat = 0
-    }
-
     private let model = IslandModel()
+    private let layoutCalculator = NotchLayoutCalculator()
     private let window: NSPanel
     private var hoverTimer: Timer?
     private var expanded = false
+    private var forcedExpandedUntil: Date?
+    private var cancellables = Set<AnyCancellable>()
 
     init() {
         window = NSPanel(
@@ -34,12 +29,20 @@ final class OverlayWindowController {
         window.level = .statusBar
         window.titleVisibility = .hidden
 
+        model.updateNotchTextAvoidance(layoutCalculator.textAvoidance())
+
         let view = IslandView(model: model)
         let hostingView = NSHostingView(rootView: view)
         hostingView.wantsLayer = true
         window.contentView = hostingView
 
         positionWindow(expanded: false, animated: false)
+
+        model.expandRequests
+            .sink { [weak self] in
+                self?.forceExpand()
+            }
+            .store(in: &cancellables)
     }
 
     func show() {
@@ -53,27 +56,44 @@ final class OverlayWindowController {
         }
     }
 
+    func addTestNotification() {
+        model.addTestNotification()
+    }
+
+    func adjustNotchLayout(_ adjustment: NotchLayoutAdjustment) {
+        layoutCalculator.apply(adjustment)
+        model.updateNotchTextAvoidance(layoutCalculator.textAvoidance())
+        positionWindow(expanded: expanded, animated: true)
+    }
+
+    func applyNotchPreset(_ preset: NotchLayoutPreset) {
+        layoutCalculator.applyPreset(preset)
+        model.updateNotchTextAvoidance(layoutCalculator.textAvoidance())
+        positionWindow(expanded: expanded, animated: true)
+    }
+
     private func updateHoverState() {
         guard let screen = screenContainingMouse() ?? NSScreen.main else {
             return
         }
 
         let mouseLocation = NSEvent.mouseLocation
-        let hoverRect = CGRect(
-            x: screen.frame.midX - Layout.hoverWidth / 2,
-            y: screen.frame.maxY - Layout.hoverHeight,
-            width: Layout.hoverWidth,
-            height: Layout.hoverHeight
-        )
+        let hoverRect = layoutCalculator.hoverRect(on: screen)
 
-        let shouldExpand = hoverRect.contains(mouseLocation) || window.frame.insetBy(dx: -18, dy: -18).contains(mouseLocation)
+        let isForcedExpanded = forcedExpandedUntil.map { Date() < $0 } ?? false
+        let shouldExpand = isForcedExpanded || hoverRect.contains(mouseLocation) || window.frame.insetBy(dx: -18, dy: -18).contains(mouseLocation)
         guard shouldExpand != expanded else {
             return
+        }
+
+        if shouldExpand {
+            model.refreshForOpening()
         }
 
         expanded = shouldExpand
         model.isExpanded = shouldExpand
         positionWindow(expanded: shouldExpand, animated: true)
+        model.setPlaybackProgressActive(shouldExpand)
     }
 
     private func positionWindow(expanded: Bool, animated: Bool) {
@@ -81,16 +101,23 @@ final class OverlayWindowController {
             return
         }
 
-        let size = expanded ? Layout.expandedSize : Layout.compactSize
-        let topInset = expanded ? Layout.expandedTopInset : Layout.compactTopInset
-        let frame = CGRect(
-            x: screen.frame.midX - size.width / 2,
-            y: screen.frame.maxY - size.height - topInset,
-            width: size.width,
-            height: size.height
-        )
+        let frame = expanded ? layoutCalculator.expandedFrame(on: screen) : layoutCalculator.compactFrame(on: screen)
 
         window.setFrame(frame, display: true, animate: animated)
+    }
+
+    private func forceExpand(duration: TimeInterval = 7) {
+        forcedExpandedUntil = Date().addingTimeInterval(duration)
+
+        guard !expanded else {
+            return
+        }
+
+        model.refreshForOpening()
+        expanded = true
+        model.isExpanded = true
+        positionWindow(expanded: true, animated: true)
+        model.setPlaybackProgressActive(true)
     }
 
     private func screenContainingMouse() -> NSScreen? {

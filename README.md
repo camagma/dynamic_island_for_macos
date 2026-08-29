@@ -1,24 +1,18 @@
 # DynamicIslandMac
 
-Локальный macOS-прототип Dynamic Island для MacBook с челкой.
+A small macOS overlay inspired by Dynamic Island for MacBooks with a notch.
 
-## Что делает
+It shows time, audio, calendar events, notifications, and a clipboard preview when the island is opened.
 
-- Показывает компактный черный остров сверху по центру экрана.
-- Раскрывается при наведении курсора в область челки.
-- Показывает текущее время и дату.
-- Пытается прочитать текущий трек из Apple Music или Spotify.
-- Показывает ближайшие события календаря через EventKit.
+## Run
 
-## Запуск
+Open `DynamicIslandMac.xcodeproj` in Xcode and run the `DynamicIslandMac` target.
 
-Открой `DynamicIslandMac.xcodeproj` в Xcode и запусти target `DynamicIslandMac`.
+macOS may ask for Calendar and Automation permissions. Automation is used to read and control supported audio apps.
 
-При первом запуске macOS может запросить:
+## Notes
 
-- доступ к календарю;
-- разрешение Automation для управления Music или Spotify.
-
-## Ограничения
-
-Это не системный Dynamic Island. macOS не дает публичного API для встраивания приложений прямо в notch, поэтому приложение рисует собственное плавающее окно поверх экрана.
+- The island is a floating overlay window, not a real system notch integration.
+- Audio progress and controls work for Apple Music and Spotify.
+- Browser audio is detected from supported tab titles where possible.
+- Notch size can be adjusted from the menu bar icon.

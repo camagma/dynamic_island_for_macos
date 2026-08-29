@@ -25,7 +25,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>DynamicIslandMac reads the currently playing track from Music or Spotify.</string>
+	<string>DynamicIslandMac reads currently playing audio from supported media apps and browsers.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>
 	<string>DynamicIslandMac shows your upcoming calendar events in the notch overlay.</string>
 	<key>NSCalendarsUsageDescription</key>
