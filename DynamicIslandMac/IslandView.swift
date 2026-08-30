@@ -59,7 +59,7 @@ struct IslandView: View {
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 2) {
                         monthCalendarGrid
                         clipboardPreview
                         Spacer(minLength: 0)
@@ -306,9 +306,14 @@ struct IslandView: View {
                     calendarEventList
                 }
                 .scrollIndicators(.visible)
-                .frame(height: 44, alignment: .top)
+                .frame(height: calendarEventListHeight, alignment: .top)
             }
         }
+    }
+
+    private var calendarEventListHeight: CGFloat {
+        let visibleRows = min(max(model.calendarItems.count, 1), 3)
+        return CGFloat(visibleRows * 13 + max(0, visibleRows - 1) * 3)
     }
 
     private var calendarEventList: some View {
@@ -330,6 +335,7 @@ struct IslandView: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
+                    .frame(height: 13)
                 }
                 .buttonStyle(.plain)
             }
