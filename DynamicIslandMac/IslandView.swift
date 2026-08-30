@@ -21,7 +21,7 @@ struct IslandView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98)))
             }
         }
-        .animation(.snappy(duration: 0.18), value: model.isExpanded)
+        .animation(.easeInOut(duration: 0.22), value: model.isExpanded)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -56,12 +56,16 @@ struct IslandView: View {
                         nowPlayingPanel
                         upcomingEvents
                         notificationCentre
-                        Spacer(minLength: 0)
-                        clipboardPreview
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-                    monthCalendarGrid
+                    VStack(alignment: .leading, spacing: 6) {
+                        monthCalendarGrid
+                        clipboardPreview
+                        Spacer(minLength: 0)
+                    }
+                    .frame(width: 159, alignment: .topLeading)
+                    .frame(maxHeight: .infinity, alignment: .topLeading)
                 }
                 .frame(maxHeight: .infinity, alignment: .top)
             }
@@ -247,36 +251,50 @@ struct IslandView: View {
     }
 
     private func calendarDayCell(_ day: CalendarDay) -> some View {
-        ZStack(alignment: .bottom) {
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(day.isToday ? Color.white.opacity(0.18) : Color.white.opacity(0.05))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .stroke(day.isToday && day.hasEvents ? Color.green : Color.clear, lineWidth: 1.4)
-                )
-                .opacity(day.dayNumber == nil ? 0 : 1)
-
+        ZStack {
             if let dayNumber = day.dayNumber {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(day.isToday ? Color.white.opacity(0.18) : Color.white.opacity(0.05))
+
+                if day.isToday && day.hasEvents {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .strokeBorder(Color.green, lineWidth: 1.2)
+                        .padding(1)
+                }
+
                 Text("\(dayNumber)")
                     .font(.system(size: 10, weight: day.isToday ? .bold : .medium))
-                    .foregroundStyle(.white.opacity(day.isToday ? 1 : 0.76))
-
-                if day.hasEvents && !day.isToday {
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 3, height: 3)
-                        .offset(y: -2.5)
-                }
+                    .foregroundStyle(calendarDayTextColor(day))
             }
         }
         .frame(width: 21, height: 18)
+        .clipped()
+    }
+
+    private func calendarDayTextColor(_ day: CalendarDay) -> Color {
+        if day.hasEvents && !day.isToday {
+            return Color.red.opacity(0.92)
+        }
+
+        return Color.white.opacity(day.isToday ? 1 : 0.76)
     }
 
     private var upcomingEvents: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("Calendar", systemImage: "calendar")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.80))
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 7) {
+                Label("Calendar", systemImage: "calendar")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.80))
+
+                Spacer(minLength: 6)
+
+                if !model.calendarItems.isEmpty {
+                    Text("\(model.calendarItems.count) events")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.white.opacity(0.42))
+                        .lineLimit(1)
+                }
+            }
 
             if model.calendarItems.isEmpty {
                 Text(model.calendarStatusText)
@@ -284,27 +302,39 @@ struct IslandView: View {
                     .foregroundStyle(.white.opacity(0.55))
                     .lineLimit(1)
             } else {
-                ForEach(model.calendarItems.prefix(2)) { item in
-                    Button {
-                        model.openCalendar(for: item)
-                    } label: {
-                        HStack(spacing: 8) {
-                            Text(item.timeText)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(.white.opacity(0.50))
-                                .frame(width: 39, alignment: .leading)
-
-                            Text(item.title)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.82))
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                        }
-                    }
-                    .buttonStyle(.plain)
+                ScrollView(.vertical, showsIndicators: true) {
+                    calendarEventList
                 }
+                .scrollIndicators(.visible)
+                .frame(height: 44, alignment: .top)
             }
         }
+    }
+
+    private var calendarEventList: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            ForEach(model.calendarItems) { item in
+                Button {
+                    model.openCalendar(for: item)
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(item.timeText)
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.white.opacity(0.70))
+                            .lineLimit(1)
+                            .frame(width: 66, alignment: .leading)
+
+                        Text(item.title)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.84))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.trailing, 8)
     }
 
     private var notificationCentre: some View {
@@ -438,10 +468,11 @@ struct IslandView: View {
                 .frame(width: 14)
 
             Text(model.clipboardText)
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(.white.opacity(model.hasClipboardText ? 0.72 : 0.45))
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
+        .frame(width: 159, alignment: .leading)
     }
 }

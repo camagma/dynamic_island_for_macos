@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import Darwin.Mach
 import EventKit
 import Foundation
 
@@ -47,7 +48,10 @@ private struct AudioSnapshot {
 
 @MainActor
 final class IslandModel: ObservableObject {
+    private static let lowPowerModeDefaultsKey = "Island.LowPowerMode"
+
     @Published var isExpanded = false
+    @Published private(set) var isLowPowerMode = UserDefaults.standard.bool(forKey: lowPowerModeDefaultsKey)
     @Published private(set) var timeText = ""
     @Published private(set) var dateText = ""
     @Published private(set) var musicText = "Nothing is playing"
@@ -96,6 +100,13 @@ final class IslandModel: ObservableObject {
         return formatter
     }()
 
+    private let eventDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.setLocalizedDateFormatFromTemplate("MMM d")
+        return formatter
+    }()
+
     private let monthFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale.current
@@ -114,9 +125,14 @@ final class IslandModel: ObservableObject {
     private var gmailPollingTimer: Timer?
     private var lockedAudioSourceBundleIdentifier: String?
     private var lastSuccessfulAudioSourceBundleIdentifier: String?
-    private let calendarCacheDuration: TimeInterval = 300
-    private let gmailPollingInterval: TimeInterval = 30
+    private var calendarCacheDuration: TimeInterval {
+        isLowPowerMode ? 900 : 300
+    }
+    private var gmailPollingInterval: TimeInterval {
+        isLowPowerMode ? 120 : 30
+    }
     private var calendarCacheDate: Date?
+    private var lastGmailSyncDate: Date?
     private var isGmailPolling = false
     private var gmailPageTokens: [String?] = [nil]
     private var gmailPageIndex = 0
@@ -162,6 +178,28 @@ final class IslandModel: ObservableObject {
         notchTextAvoidance = avoidance
     }
 
+    func toggleLowPowerMode() {
+        isLowPowerMode.toggle()
+        UserDefaults.standard.set(isLowPowerMode, forKey: Self.lowPowerModeDefaultsKey)
+
+        if isLowPowerMode {
+            setPlaybackProgressActive(false)
+        }
+
+        startGmailPollingIfConfigured()
+    }
+
+    func diagnosticsLines() -> [String] {
+        [
+            "Memory: \(residentMemoryText())",
+            "Low Power: \(isLowPowerMode ? "On" : "Off")",
+            "Gmail interval: \(Int(gmailPollingInterval))s",
+            "Last Gmail sync: \(relativeTimeText(since: lastGmailSyncDate))",
+            "Calendar cache: \(relativeTimeText(since: calendarCacheDate))",
+            "Audio source: \(audioSourceName)"
+        ]
+    }
+
     func controlAudio(_ action: AudioControlAction) {
         let source = currentAudioSource ?? Self.audioSources.first {
             !$0.controlScripts.isEmpty && isAppRunning(bundleIdentifier: $0.bundleIdentifier)
@@ -187,6 +225,7 @@ final class IslandModel: ObservableObject {
         playbackProgressTimer = nil
 
         guard isActive,
+              !isLowPowerMode,
               isMusicPlaying,
               audioElapsed != nil,
               audioDuration != nil else {
@@ -267,7 +306,9 @@ final class IslandModel: ObservableObject {
             if !didShowNewMessages {
                 await loadRecentGmailMessagesForDisplay(showStatus: false)
             }
-            await loadGmailInboxPage(pageIndex: 0, pageToken: nil, showStatus: false)
+            if !self.isLowPowerMode {
+                await loadGmailInboxPage(pageIndex: 0, pageToken: nil, showStatus: false)
+            }
         }
 
         gmailPollingTimer = Timer.scheduledTimer(withTimeInterval: gmailPollingInterval, repeats: true) { [weak self] _ in
@@ -297,6 +338,7 @@ final class IslandModel: ObservableObject {
 
         do {
             let messages = try await gmailService.pollNewInboxMessages()
+            lastGmailSyncDate = Date()
             if messages.isEmpty && showStatus {
                 notificationStatusText = "No new Gmail messages"
                 expandRequests.send(5)
@@ -312,6 +354,7 @@ final class IslandModel: ObservableObject {
 
             return !messages.isEmpty
         } catch {
+            lastGmailSyncDate = Date()
             notificationStatusText = "Gmail API unavailable"
             if showStatus {
                 expandRequests.send(5)
@@ -615,16 +658,17 @@ final class IslandModel: ObservableObject {
 
         let start = Date()
         let end = Calendar.current.date(byAdding: .day, value: 7, to: start) ?? start
-        let predicate = eventStore.predicateForEvents(withStart: start, end: end, calendars: nil)
+        let calendars = eventStore.calendars(for: .event)
+        let searchCalendars: [EKCalendar]? = calendars.isEmpty ? nil : calendars
+        let predicate = eventStore.predicateForEvents(withStart: start, end: end, calendars: searchCalendars)
         let events = eventStore.events(matching: predicate)
-            .filter { !$0.isAllDay }
             .sorted { $0.startDate < $1.startDate }
-            .prefix(3)
+            .prefix(20)
 
         calendarItems = events.map { event in
             CalendarItem(
                 title: event.title.isEmpty ? "Untitled" : event.title,
-                timeText: eventTimeFormatter.string(from: event.startDate),
+                timeText: calendarEventTimeText(for: event),
                 startDate: event.startDate,
                 eventIdentifier: event.eventIdentifier
             )
@@ -633,6 +677,20 @@ final class IslandModel: ObservableObject {
         calendarStatusText = calendarItems.isEmpty ? "No events for 7 days" : ""
         refreshCalendarShell(events: eventStore.events(matching: monthPredicate()))
         calendarCacheDate = Date()
+    }
+
+    private func calendarEventTimeText(for event: EKEvent) -> String {
+        let date = event.startDate ?? Date()
+        if event.isAllDay {
+            return Calendar.current.isDateInToday(date) ? "All day" : eventDateFormatter.string(from: date)
+        }
+
+        let time = eventTimeFormatter.string(from: date)
+        if Calendar.current.isDateInToday(date) {
+            return time
+        }
+
+        return "\(eventDateFormatter.string(from: date)) \(time)"
     }
 
     private func refreshCalendarShell(events: [EKEvent] = []) {
@@ -676,6 +734,41 @@ final class IslandModel: ObservableObject {
         return Array(symbols[firstIndex...] + symbols[..<firstIndex]).map {
             String($0.prefix(2)).uppercased()
         }
+    }
+
+    private func residentMemoryText() -> String {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+
+        guard result == KERN_SUCCESS else {
+            return "Unavailable"
+        }
+
+        let megabytes = Double(info.phys_footprint) / 1_048_576
+        return String(format: "%.1f MB", megabytes)
+    }
+
+    private func relativeTimeText(since date: Date?) -> String {
+        guard let date else {
+            return "Never"
+        }
+
+        let seconds = max(0, Int(Date().timeIntervalSince(date)))
+        if seconds < 60 {
+            return "\(seconds)s ago"
+        }
+
+        let minutes = seconds / 60
+        if minutes < 60 {
+            return "\(minutes)m ago"
+        }
+
+        return "\(minutes / 60)h ago"
     }
 
     private func isAppRunning(bundleIdentifier: String) -> Bool {

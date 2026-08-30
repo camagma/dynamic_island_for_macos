@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import QuartzCore
 import SwiftUI
 
 @MainActor
@@ -64,6 +65,18 @@ final class OverlayWindowController {
         model.checkGmailNow()
     }
 
+    var isLowPowerMode: Bool {
+        model.isLowPowerMode
+    }
+
+    func toggleLowPowerMode() {
+        model.toggleLowPowerMode()
+    }
+
+    func diagnosticsLines() -> [String] {
+        model.diagnosticsLines()
+    }
+
     func adjustNotchLayout(_ adjustment: NotchLayoutAdjustment) {
         layoutCalculator.apply(adjustment)
         model.updateNotchTextAvoidance(layoutCalculator.textAvoidance())
@@ -107,7 +120,16 @@ final class OverlayWindowController {
 
         let frame = expanded ? layoutCalculator.expandedFrame(on: screen) : layoutCalculator.compactFrame(on: screen)
 
-        window.setFrame(frame, display: true, animate: animated)
+        guard animated else {
+            window.setFrame(frame, display: true)
+            return
+        }
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.24
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            window.animator().setFrame(frame, display: true)
+        }
     }
 
     private func forceExpand(duration: TimeInterval = 5) {

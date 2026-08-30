@@ -16,6 +16,8 @@ struct DynamicIslandMacApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var overlayController: OverlayWindowController?
     private var statusItem: NSStatusItem?
+    private var lowPowerMenuItem: NSMenuItem?
+    private var diagnosticsMenuItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -40,14 +42,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let menu = NSMenu()
+        menu.delegate = self
         menu.addItem(NSMenuItem(title: "Test Notification", action: #selector(testNotification), keyEquivalent: "n"))
         menu.addItem(NSMenuItem(title: "Check Gmail Now", action: #selector(checkGmailNow), keyEquivalent: "g"))
+        menu.addItem(lowPowerModeMenuItem())
+        menu.addItem(diagnosticsMenu())
         menu.addItem(calibrationMenuItem())
         menu.addItem(presetsMenuItem())
         menu.addItem(NSMenuItem.separator())
         menu.addItem(NSMenuItem(title: "Quit DynamicIslandMac", action: #selector(quit), keyEquivalent: "q"))
         item.menu = menu
         statusItem = item
+    }
+
+    private func lowPowerModeMenuItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Low Power Mode", action: #selector(toggleLowPowerMode), keyEquivalent: "l")
+        item.target = self
+        lowPowerMenuItem = item
+        return item
+    }
+
+    private func diagnosticsMenu() -> NSMenuItem {
+        let item = NSMenuItem(title: "Diagnostics", action: nil, keyEquivalent: "")
+        item.submenu = NSMenu()
+        diagnosticsMenuItem = item
+        return item
     }
 
     private func calibrationMenuItem() -> NSMenuItem {
@@ -88,6 +107,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func checkGmailNow() {
         overlayController?.checkGmailNow()
+    }
+
+    @objc private func toggleLowPowerMode() {
+        overlayController?.toggleLowPowerMode()
+        updateMenuState()
     }
 
     @objc private func makeWider() {
@@ -136,5 +160,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    private func updateMenuState() {
+        lowPowerMenuItem?.state = overlayController?.isLowPowerMode == true ? .on : .off
+
+        let submenu = diagnosticsMenuItem?.submenu
+        submenu?.removeAllItems()
+
+        let lines = overlayController?.diagnosticsLines() ?? ["Diagnostics unavailable"]
+        for line in lines {
+            let item = NSMenuItem(title: line, action: nil, keyEquivalent: "")
+            item.isEnabled = false
+            submenu?.addItem(item)
+        }
+    }
+}
+
+extension AppDelegate: NSMenuDelegate {
+    func menuWillOpen(_ menu: NSMenu) {
+        updateMenuState()
     }
 }
