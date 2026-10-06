@@ -22,6 +22,8 @@ Automation is used for supported audio apps and browser title detection.
 - Menu bar diagnostics
 - Notch size presets and manual calibration
 
+<img width="1470" height="956" alt="image" src="https://github.com/user-attachments/assets/5fc53079-58dc-43ab-b54c-c28cebbcde61" />
+
 ## Gmail Setup
 
 Gmail support uses OAuth. An API key alone will not work.
